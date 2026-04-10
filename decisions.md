@@ -134,3 +134,17 @@ This document captures the key implementation decisions for the Entrix Cloud Eng
   - Not least-privilege; should be tightened in a production implementation.
 - Outcome:
   - Documented as intentional challenge-phase compromise and easy future hardening target.
+
+## 13) Code organization: split infrastructure logic across multiple TypeScript modules
+
+- Decision: Split CDK implementation into separate files by concern:
+  - `lib/data-plane.ts` for runtime/serverless resources
+  - `lib/cicd-pipeline.ts` for deployment pipeline resources
+  - `lib/cloud-engineer-challenge-stack.ts` as thin composition layer
+- Why:
+  - Improves readability, reviewability, and maintainability.
+  - Reduces cognitive load when iterating on either runtime or CI/CD components.
+- Tradeoff:
+  - Slightly more files/import wiring.
+- Outcome:
+  - Cleaner structure without changing the deployed resource model.
