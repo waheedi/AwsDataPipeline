@@ -3,8 +3,13 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 
 export class CloudEngineerChallengeStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -53,6 +58,98 @@ export class CloudEngineerChallengeStack extends cdk.Stack {
     ordersTable.grantWriteData(postLambda);
     orderResultsBucket.grantPut(lambdaB);
 
+    const pipelineAlertsTopic = new sns.Topic(this, 'PipelineAlertsTopic', {
+      topicName: 'data-pipeline-alerts',
+    });
+
+    const invokeLambdaA = new tasks.LambdaInvoke(this, 'InvokeLambdaA', {
+      lambdaFunction: lambdaA,
+      payloadResponseOnly: true,
+      resultPath: '$.lambdaA',
+    });
+
+    const waitBeforeRetry = new sfn.Wait(this, 'WaitBeforeRetry', {
+      time: sfn.WaitTime.duration(cdk.Duration.seconds(30)),
+    });
+
+    const processSingleOrder = new tasks.LambdaInvoke(this, 'ProcessSingleOrder', {
+      lambdaFunction: lambdaB,
+      payloadResponseOnly: true,
+      resultPath: sfn.JsonPath.DISCARD,
+    });
+
+    const notifyOrderProcessingFailure = new tasks.SnsPublish(this, 'NotifyOrderProcessingFailure', {
+      topic: pipelineAlertsTopic,
+      subject: 'Order Processing Failure',
+      message: sfn.TaskInput.fromObject({
+        error: sfn.JsonPath.stringAt('$.error.Error'),
+        cause: sfn.JsonPath.stringAt('$.error.Cause'),
+        order: sfn.JsonPath.objectAt('$'),
+        executionArn: sfn.JsonPath.stringAt('$$.Execution.Id'),
+        note: 'Order failed in LambdaB. Notify Slack/webhook subscriber from this SNS topic.',
+      }),
+      resultPath: sfn.JsonPath.DISCARD,
+    });
+
+    const markOrderFailureHandled = new sfn.Pass(this, 'MarkOrderFailureHandled');
+    notifyOrderProcessingFailure.next(markOrderFailureHandled);
+    processSingleOrder.addCatch(notifyOrderProcessingFailure, {
+      resultPath: '$.error',
+    });
+
+    const processOrders = new sfn.Map(this, 'ProcessOrders', {
+      itemsPath: sfn.JsonPath.stringAt('$.lambdaA.orders'),
+      resultPath: sfn.JsonPath.DISCARD,
+      maxConcurrency: 10,
+    });
+    processOrders.itemProcessor(processSingleOrder);
+
+    const notifyProcessingFailure = new tasks.SnsPublish(this, 'NotifyProcessingFailure', {
+      topic: pipelineAlertsTopic,
+      subject: 'Data Pipeline Fatal Failure',
+      message: sfn.TaskInput.fromObject({
+        error: sfn.JsonPath.stringAt('$.error.Error'),
+        cause: sfn.JsonPath.stringAt('$.error.Cause'),
+        executionArn: sfn.JsonPath.stringAt('$$.Execution.Id'),
+        stateMachine: sfn.JsonPath.stringAt('$$.StateMachine.Name'),
+        note: 'Notify Slack/webhook subscriber from this SNS topic.',
+      }),
+      resultPath: sfn.JsonPath.DISCARD,
+    });
+
+    const pipelineFailed = new sfn.Fail(this, 'PipelineFailed', {
+      error: 'LambdaBProcessingFailed',
+      cause: 'One or more orders failed in LambdaB. Notification published.',
+    });
+
+    processOrders.addCatch(notifyProcessingFailure, {
+      resultPath: '$.error',
+    });
+    notifyProcessingFailure.next(pipelineFailed);
+
+    const pipelineSucceeded = new sfn.Succeed(this, 'PipelineSucceeded');
+    processOrders.next(pipelineSucceeded);
+
+    const resultsReadyChoice = new sfn.Choice(this, 'ResultsReady');
+    resultsReadyChoice.when(
+      sfn.Condition.booleanEquals('$.lambdaA.results', true),
+      processOrders,
+    );
+    resultsReadyChoice.otherwise(waitBeforeRetry);
+    waitBeforeRetry.next(invokeLambdaA);
+
+    const dataPipelineStateMachine = new sfn.StateMachine(this, 'DataPipelineStateMachine', {
+      definitionBody: sfn.DefinitionBody.fromChainable(invokeLambdaA.next(resultsReadyChoice)),
+      timeout: cdk.Duration.minutes(10),
+    });
+
+    const pipelineScheduleRule = new events.Rule(this, 'DataPipelineScheduleRule', {
+      schedule: events.Schedule.rate(cdk.Duration.minutes(15)),
+      description: 'Trigger the data pipeline on a fixed schedule.',
+    });
+
+    pipelineScheduleRule.addTarget(new targets.SfnStateMachine(dataPipelineStateMachine));
+
     const api = new apigateway.RestApi(this, 'OrdersApi', {
       restApiName: 'orders-api',
       deployOptions: {
@@ -84,6 +181,14 @@ export class CloudEngineerChallengeStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'LambdaBName', {
       value: lambdaB.functionName,
+    });
+
+    new cdk.CfnOutput(this, 'DataPipelineStateMachineArn', {
+      value: dataPipelineStateMachine.stateMachineArn,
+    });
+
+    new cdk.CfnOutput(this, 'PipelineAlertsTopicArn', {
+      value: pipelineAlertsTopic.topicArn,
     });
   }
 }
