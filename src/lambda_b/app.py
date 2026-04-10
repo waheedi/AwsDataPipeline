@@ -1,9 +1,12 @@
 import os
 import requests  # Keep it
+import json
+import boto3
 from typing import Any
 import datetime as dt
 
 LOG_BUCKET = os.environ['LOG_BUCKET']
+s3_client = boto3.client('s3')
 
 
 def save_to_s3(data: dict[str, Any], filename: str):
@@ -16,8 +19,12 @@ def save_to_s3(data: dict[str, Any], filename: str):
     filename: str
         The full object name for the file.
     """
-    pass
-    # Complete the code here
+    s3_client.put_object(
+        Bucket=LOG_BUCKET,
+        Key=f"{filename}.json",
+        Body=json.dumps(data).encode("utf-8"),
+        ContentType="application/json",
+    )
 
 
 def lambda_handler(event, context):

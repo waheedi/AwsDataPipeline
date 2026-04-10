@@ -1,11 +1,15 @@
 import logging
 import json
 import os
+import datetime as dt
+import boto3
 from typing import Any
 
 logger = logging.getLogger()
 
 TABLE_NAME = os.environ['TABLE_NAME']
+dynamodb = boto3.resource("dynamodb")
+table = dynamodb.Table(TABLE_NAME)
 
 
 def save_to_db(records: list[dict[str, Any]]):
@@ -16,7 +20,16 @@ def save_to_db(records: list[dict[str, Any]]):
     records: list[dict[str, Any]]
         The data to save to Table.
     """
-    # saving records to the Table, Complete the code in here
+    if isinstance(records, str):
+        records = json.loads(records)
+
+    ttl_epoch_seconds = int(dt.datetime.now(dt.timezone.utc).timestamp()) + 24 * 60 * 60
+    with table.batch_writer() as batch:
+        for record in records:
+            item = record.copy()
+            item["expires_at"] = ttl_epoch_seconds
+            batch.put_item(Item=item)
+
     logger.info("Records are successfully saved to the DB table %s.", TABLE_NAME)
 
 

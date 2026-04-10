@@ -1,0 +1,32 @@
+{
+  "name": "cloud-engineer-challenge",
+  "version": "1.0.0",
+  "description": "Our organization is participating in an energy market auction and has a service that generates and submits orders to the Auction Platform provider. Software Engineers and Data Scientists have just completed working on the logic of the service that accepts orders via an API and stores them in a DB. Another service then submits them to the Auction Platform. Data Scientists came up with the logic for Data Pipeline to retrieve and process the results and store them in an S3 bucket. You are asked to provide the Infrastructure to deploy all required resources to AWS using aws-cdk for IaC (with Typescript). ## The task",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "synth": "npm run build && cdk synth",
+    "deploy": "npm run build && cdk deploy",
+    "test": "echo \"No tests configured yet\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://entrix-acmbyu:kp08iFsB-@git.codesubmit.io/entrix/cloud-engineer-challenge-hzkpvf"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "aws-cdk-lib": "^2.248.0",
+    "constructs": "^10.6.0",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "aws-cdk": "^2.1118.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  }
+}
