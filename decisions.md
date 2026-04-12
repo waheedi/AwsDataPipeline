@@ -105,10 +105,10 @@ This document captures the key implementation decisions for the Entrix Cloud Eng
 
 ## 10) GitHub Actions role in the workflow
 
-- Decision: Add GitHub Actions workflow for `master` and PRs to run `npm ci`, `build`, and `synth`.
+- Decision: Add GitHub Actions workflow for `master` and PRs to run `npm ci`, CDK construct tests, and `synth`.
 - Why:
   - Fast feedback before or alongside AWS deployment pipeline execution.
-  - Catches type/synth regressions early.
+  - Catches regressions in infrastructure intent via assertions, not only type/synth checks.
 - Tradeoff:
   - Does not deploy directly; deployment remains AWS CodePipeline’s responsibility.
 - Outcome:
@@ -148,3 +148,36 @@ This document captures the key implementation decisions for the Entrix Cloud Eng
   - Slightly more files/import wiring.
 - Outcome:
   - Cleaner structure without changing the deployed resource model.
+
+## 14) Optional quality gate: CDK construct tests with `aws-cdk-lib/assertions`
+
+- Decision: Add CDK-level tests covering core requirements and optional controls.
+- Why:
+  - Gives deterministic checks for orchestration, TTL, CI/CD shape, and alerting resources.
+  - Satisfies optional requirement to test constructs and run those tests in CI.
+- Tradeoff:
+  - Tests assert template intent, not runtime behavior.
+- Outcome:
+  - Added tests in `test/cdk.test.ts` and wired execution in GitHub Actions.
+
+## 15) Optional deployment-failure notifications: EventBridge -> SNS
+
+- Decision: Add a dedicated SNS topic and EventBridge rule for CodePipeline execution failures.
+- Why:
+  - Meets optional requirement for deployment pipeline failure notifications.
+  - Keeps notifications decoupled and extensible (email, webhook, Lambda subscriber).
+- Tradeoff:
+  - Requires subscriber setup to deliver to a human destination.
+- Outcome:
+  - `DeploymentPipelineFailureRule` publishes failure context to `DeploymentPipelineAlertsTopic`.
+
+## 16) CI/CD environment switchability
+
+- Decision: Introduce `DeploymentEnvironment` and `GitHubConnectionArn` stack parameters and pass them through CodeBuild.
+- Why:
+  - Enables controlled environment naming and connection selection without code edits.
+  - Supports future environment promotion patterns with parameterized deploys.
+- Tradeoff:
+  - Adds parameter management responsibility during deployments.
+- Outcome:
+  - Pipeline name and deploy command are now parameterized for environment-aware operation.

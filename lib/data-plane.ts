@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -21,6 +22,14 @@ export interface DataPlaneResources {
 }
 
 export function createDataPlane(scope: cdk.Stack): DataPlaneResources {
+  const candidateRoots = [
+    path.resolve(__dirname, '..'),
+    path.resolve(__dirname, '..', '..'),
+  ];
+  const projectRoot = candidateRoots.find((candidate) => (
+    fs.existsSync(path.join(candidate, 'src', 'post_lambda'))
+  )) ?? path.resolve(__dirname, '..');
+
   const ordersTable = new dynamodb.Table(scope, 'OrdersTable', {
     partitionKey: { name: 'record_id', type: dynamodb.AttributeType.STRING },
     billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -38,7 +47,7 @@ export function createDataPlane(scope: cdk.Stack): DataPlaneResources {
   });
 
   const postLambda = new lambda.Function(scope, 'PostLambda', {
-    code: lambda.Code.fromAsset(path.join(__dirname, '..', 'src', 'post_lambda')),
+    code: lambda.Code.fromAsset(path.join(projectRoot, 'src', 'post_lambda')),
     handler: 'app.lambda_handler',
     runtime: lambda.Runtime.PYTHON_3_12,
     environment: {
@@ -47,13 +56,13 @@ export function createDataPlane(scope: cdk.Stack): DataPlaneResources {
   });
 
   const lambdaA = new lambda.Function(scope, 'LambdaA', {
-    code: lambda.Code.fromAsset(path.join(__dirname, '..', 'src', 'lambda_a')),
+    code: lambda.Code.fromAsset(path.join(projectRoot, 'src', 'lambda_a')),
     handler: 'app.lambda_handler',
     runtime: lambda.Runtime.PYTHON_3_12,
   });
 
   const lambdaB = new lambda.Function(scope, 'LambdaB', {
-    code: lambda.Code.fromAsset(path.join(__dirname, '..', 'src', 'lambda_b')),
+    code: lambda.Code.fromAsset(path.join(projectRoot, 'src', 'lambda_b')),
     handler: 'app.lambda_handler',
     runtime: lambda.Runtime.PYTHON_3_12,
     environment: {

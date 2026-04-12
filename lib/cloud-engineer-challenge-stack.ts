@@ -42,9 +42,13 @@ export class CloudEngineerChallengeStack extends cdk.Stack {
       value: cicd.deploymentPipeline.pipelineName,
     });
 
-    new cdk.CfnOutput(this, 'GitHubConnectionArn', {
-      value: cicd.githubConnection.attrConnectionArn,
-      description: 'Complete the GitHub connection handshake in AWS Console before first pipeline run.',
+    new cdk.CfnOutput(this, 'ActiveGitHubConnectionArn', {
+      value: cicd.githubConnectionArn,
+    });
+
+    new cdk.CfnOutput(this, 'DeploymentPipelineAlertsTopicArn', {
+      value: cicd.deploymentPipelineAlertsTopic.topicArn,
+      description: 'SNS topic for deployment pipeline execution failure alerts.',
     });
   }
 }
