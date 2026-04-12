@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
+import { spawnSync } from 'child_process';
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -61,8 +62,33 @@ export function createDataPlane(scope: cdk.Stack): DataPlaneResources {
     runtime: lambda.Runtime.PYTHON_3_12,
   });
 
+  const lambdaBSourcePath = path.join(projectRoot, 'src', 'lambda_b');
+  const lambdaBInstallCommand = [
+    'set -euo pipefail',
+    'cp -R /asset-input/. /asset-output/',
+    'if [ -f /asset-input/requirements.txt ]; then python3 -m pip install -r /asset-input/requirements.txt -t /asset-output > /dev/null; fi',
+    'find /asset-output -type d -name "__pycache__" -prune -exec rm -rf {} +',
+  ].join(' && ');
+
   const lambdaB = new lambda.Function(scope, 'LambdaB', {
-    code: lambda.Code.fromAsset(path.join(projectRoot, 'src', 'lambda_b')),
+    code: lambda.Code.fromAsset(lambdaBSourcePath, {
+      bundling: {
+        // Prefer local bundling so CodeBuild and local synth do not depend on Docker daemon access.
+        local: {
+          tryBundle(outputDir: string): boolean {
+            const localCommand = [
+              'set -euo pipefail',
+              `cp -R "${lambdaBSourcePath}/." "${outputDir}/"`,
+              `if [ -f "${lambdaBSourcePath}/requirements.txt" ]; then python3 -m pip install -r "${lambdaBSourcePath}/requirements.txt" -t "${outputDir}" > /dev/null; fi`,
+              `find "${outputDir}" -type d -name "__pycache__" -prune -exec rm -rf {} +`,
+            ].join(' && ');
+            return spawnSync('bash', ['-c', localCommand], { stdio: 'inherit' }).status === 0;
+          },
+        },
+        image: lambda.Runtime.PYTHON_3_12.bundlingImage,
+        command: ['bash', '-c', lambdaBInstallCommand],
+      },
+    }),
     handler: 'app.lambda_handler',
     runtime: lambda.Runtime.PYTHON_3_12,
     environment: {

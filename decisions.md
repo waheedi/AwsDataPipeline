@@ -71,14 +71,14 @@ This document captures the key implementation decisions for the Entrix Cloud Eng
 
 ## 7) Lambda dependency packaging strategy
 
-- Decision: Vendor `requests` dependency directly inside `src/lambda_b` source tree.
+- Decision: Keep only `requirements.txt` in source and install Lambda B Python dependencies during CDK asset bundling.
 - Why:
-  - Avoids Docker-based Python bundling dependency in this environment.
-  - Keeps deployment deterministic for the challenge setup.
+  - Avoids committing vendored third-party libraries to Git.
+  - Keeps Lambda packaging deterministic while supporting both local bundling and Docker fallback.
 - Tradeoff:
-  - Larger repository footprint; less elegant than layers/build artifact packaging.
+  - Slightly longer synth/deploy time because dependencies are installed at build time.
 - Outcome:
-  - Lambda B runs with packaged dependency without Docker requirement.
+  - Lambda B dependency artifacts are generated during bundle/synth, not stored in repository history.
 
 ## 8) Infrastructure deployment approach: CDK in TypeScript
 

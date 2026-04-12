@@ -1,5 +1,5 @@
 import os
-import requests  # Keep it
+import requests
 import json
 import boto3
 from typing import Any
