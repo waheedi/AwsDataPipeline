@@ -11,7 +11,7 @@ export class CloudEngineerChallengeStack extends cdk.Stack {
     const cicd = createCicdPipeline(this);
 
     new cdk.CfnOutput(this, 'OrdersApiUrl', {
-      value: `${dataPlane.api.url}orders`,
+      value: dataPlane.api.urlForPath('/orders'),
     });
 
     new cdk.CfnOutput(this, 'OrdersTableName', {
